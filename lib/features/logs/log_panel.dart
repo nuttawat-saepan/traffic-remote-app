@@ -57,7 +57,7 @@ class _LogCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (entry.status) {
-      CommandResultStatus.success => const Color(0xFF126C59),
+      CommandResultStatus.success => const Color(0xFF00810E),
       CommandResultStatus.timeout => const Color(0xFF965E00),
       CommandResultStatus.unexpected => const Color(0xFF8A5A00),
       CommandResultStatus.error => const Color(0xFFB3261E),

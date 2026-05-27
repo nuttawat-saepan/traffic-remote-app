@@ -9,6 +9,9 @@ import 'features/settings/settings_service.dart';
 
 enum TopRemoteStatus { ready, sending, success, noResponse }
 
+const appGreen = Color(0xFF00810E);
+const appRed = Color(0xFFDC2626);
+
 class TrafficRemoteApp extends StatefulWidget {
   const TrafficRemoteApp({super.key});
 
@@ -64,13 +67,15 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
       title: 'Traffic Remote',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF126C59)),
+        colorScheme: ColorScheme.fromSeed(seedColor: appGreen),
         useMaterial3: true,
-        fontFamily: GoogleFonts.chakraPetch().fontFamily,
+        fontFamily: GoogleFonts.ibmPlexSansThai().fontFamily,
         fontFamilyFallback: const <String>['Noto Sans Thai', 'Roboto'],
         scaffoldBackgroundColor: const Color(0xFFF4F6F8),
-        textTheme: GoogleFonts.chakraPetchTextTheme(ThemeData.light().textTheme)
-            .copyWith(
+        textTheme:
+            GoogleFonts.ibmPlexSansThaiTextTheme(
+              ThemeData.light().textTheme,
+            ).copyWith(
               bodyLarge: const TextStyle(
                 fontSize: 19,
                 fontWeight: FontWeight.w700,
@@ -116,6 +121,9 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
                 _settingsService,
               ]),
               builder: (context, _) {
+                final isConnected = _serialService.isConnected;
+                final canUseRemote = _selectedIndex >= 0;
+                final selectedIndex = _selectedIndex;
                 final currentTopStatus = _serialService.isSending
                     ? TopRemoteStatus.sending
                     : _topStatus;
@@ -141,18 +149,36 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
                           serialService: _serialService,
                           isPaired: _settingsService.settings.isPaired,
                         ),
-                        _CommandStatusCard(
-                          status: currentTopStatus,
-                          entry: _latestLog,
-                        ),
-                        Expanded(child: pages[_selectedIndex]),
+                        if (selectedIndex == 0)
+                          _CommandStatusCard(
+                            status: currentTopStatus,
+                            entry: _latestLog,
+                          ),
+                        Expanded(child: pages[selectedIndex]),
                       ],
                     ),
                   ),
                   bottomNavigationBar: _BottomNav(
-                    selectedIndex: _selectedIndex,
-                    onSelected: (index) =>
-                        setState(() => _selectedIndex = index),
+                    selectedIndex: selectedIndex,
+                    canUseRemote: canUseRemote,
+                    onSelected: (index) {
+                      if (index == 0 && !canUseRemote) {
+                        final message = !isConnected
+                            ? 'กรุณาเชื่อมต่ออุปกรณ์ก่อนใช้งานรีโมท'
+                            : 'กรุณา pair อุปกรณ์ก่อนใช้งานรีโมท';
+                        ScaffoldMessenger.of(context)
+                          ..hideCurrentSnackBar()
+                          ..showSnackBar(
+                            SnackBar(
+                              content: Text(message),
+                              behavior: SnackBarBehavior.floating,
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        return;
+                      }
+                      setState(() => _selectedIndex = index);
+                    },
                   ),
                 );
               },
@@ -162,9 +188,14 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
 }
 
 class _BottomNav extends StatelessWidget {
-  const _BottomNav({required this.selectedIndex, required this.onSelected});
+  const _BottomNav({
+    required this.selectedIndex,
+    required this.canUseRemote,
+    required this.onSelected,
+  });
 
   final int selectedIndex;
+  final bool canUseRemote;
   final ValueChanged<int> onSelected;
 
   @override
@@ -184,6 +215,8 @@ class _BottomNav extends StatelessWidget {
               selectedIcon: Icons.gamepad,
               label: 'รีโมท',
               selected: selectedIndex == 0,
+              enabled: canUseRemote,
+              allowDisabledTap: true,
               onTap: () => onSelected(0),
             ),
             _BottomNavItem(
@@ -191,6 +224,7 @@ class _BottomNav extends StatelessWidget {
               selectedIcon: Icons.bluetooth,
               label: 'เชื่อมต่อ',
               selected: selectedIndex == 1,
+              enabled: true,
               onTap: () => onSelected(1),
             ),
           ],
@@ -206,29 +240,39 @@ class _BottomNavItem extends StatelessWidget {
     required this.selectedIcon,
     required this.label,
     required this.selected,
+    required this.enabled,
     required this.onTap,
+    this.allowDisabledTap = false,
   });
 
   final IconData icon;
   final IconData selectedIcon;
   final String label;
   final bool selected;
+  final bool enabled;
   final VoidCallback onTap;
+  final bool allowDisabledTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? const Color(0xFF0D4EAE) : const Color(0xFF1F2933);
+    final color = !enabled
+        ? const Color(0xFF94A3B8)
+        : selected
+        ? const Color(0xFF0D4EAE)
+        : const Color(0xFF1F2933);
 
     return Expanded(
       child: InkWell(
-        onTap: onTap,
+        onTap: enabled || allowDisabledTap ? onTap : null,
         child: Column(
           children: <Widget>[
             AnimatedContainer(
               duration: const Duration(milliseconds: 160),
               width: 80,
               height: 5,
-              color: selected ? const Color(0xFF0D4EAE) : Colors.transparent,
+              color: selected && enabled
+                  ? const Color(0xFF0D4EAE)
+                  : Colors.transparent,
             ),
             const SizedBox(height: 18),
             Icon(selected ? selectedIcon : icon, color: color, size: 31),
@@ -261,14 +305,16 @@ class _ConnectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final connected = serialService.isConnected || isPaired;
+    final connected = serialService.isConnected;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
-      decoration: const BoxDecoration(
-        color: Color(0xFF078215),
-        border: Border(bottom: BorderSide(color: Color(0xFF0A6214), width: 2)),
+      decoration: BoxDecoration(
+        color: connected ? appGreen : appRed,
+        border: Border(
+          bottom: BorderSide(color: connected ? appGreen : appRed, width: 2),
+        ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -312,7 +358,6 @@ class _CommandStatusCard extends StatelessWidget {
     final details = entry == null
         ? 'พร้อมส่งคำสั่ง'
         : 'คำสั่ง ${entry.action} • ${_formatTime(entry.timestamp)}';
-    final sentCommand = entry?.sentCommand;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
@@ -364,21 +409,6 @@ class _CommandStatusCard extends StatelessWidget {
                       letterSpacing: 0,
                     ),
                   ),
-                  if (sentCommand != null && sentCommand.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      'TX: $sentCommand',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: visual.foreground,
-                        fontSize: 13,
-                        height: 1.1,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -394,7 +424,7 @@ class _CommandStatusCard extends StatelessWidget {
         return const _StatusVisual(
           label: 'พร้อม',
           background: Color(0xFFE8F6ED),
-          foreground: Color(0xFF078215),
+          foreground: appGreen,
           iconBackground: Color(0xFFE8F6ED),
           icon: Icons.check,
         );
@@ -410,7 +440,7 @@ class _CommandStatusCard extends StatelessWidget {
         return const _StatusVisual(
           label: 'สำเร็จ',
           background: Color(0xFFDFF2E5),
-          foreground: Color(0xFF078215),
+          foreground: appGreen,
           iconBackground: Color(0xFFDFF2E5),
           icon: Icons.check,
         );

@@ -76,12 +76,12 @@ final numberCommands = <RemoteCommand>[
 
 final modeCommands = <RemoteCommand>[
   loraAtCommand(
-    name: 'อัตโนมัติ',
+    name: 'AUTO',
     hexPayload: '7B 02 01 C1 79 7D',
     expectedResponse: 'AUTO OK',
   ),
   loraAtCommand(
-    name: 'ปรับเอง',
+    name: 'MANUAL',
     hexPayload: '7B 02 02 81 78 7D',
     expectedResponse: 'MANUAL OK',
   ),

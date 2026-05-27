@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../logs/log_model.dart';
 import '../serial/serial_service.dart';
@@ -63,7 +64,7 @@ class _RemoteScreenState extends State<RemoteScreen> {
               onPressed: _sendRemoteCommand,
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 12),
           ..._numberRows(canSend),
         ],
       ),
@@ -83,7 +84,7 @@ class _RemoteScreenState extends State<RemoteScreen> {
             ),
           ),
         )
-        ..add(const SizedBox(height: 3));
+        ..add(const SizedBox(height: 12));
     }
     rows.removeLast();
     return rows;
@@ -101,7 +102,6 @@ class _ModeButtons extends StatelessWidget {
     return _CommandRow(
       commands: modeCommands,
       enabled: enabled,
-      accent: const Color(0xFF0753B7),
       isMode: true,
       onPressed: onPressed,
     );
@@ -113,13 +113,11 @@ class _CommandRow extends StatelessWidget {
     required this.commands,
     required this.enabled,
     required this.onPressed,
-    this.accent = const Color(0xFF111827),
     this.isMode = false,
   });
 
   final List<RemoteCommand> commands;
   final bool enabled;
-  final Color accent;
   final bool isMode;
   final ValueChanged<RemoteCommand> onPressed;
 
@@ -132,12 +130,11 @@ class _CommandRow extends StatelessWidget {
             child: _RemoteButton(
               command: commands[index],
               enabled: enabled,
-              accent: accent,
               isMode: isMode,
               onPressed: onPressed,
             ),
           ),
-          if (index != commands.length - 1) const SizedBox(width: 8),
+          if (index != commands.length - 1) const SizedBox(width: 12),
         ],
       ],
     );
@@ -148,14 +145,12 @@ class _RemoteButton extends StatelessWidget {
   const _RemoteButton({
     required this.command,
     required this.enabled,
-    required this.accent,
     required this.isMode,
     required this.onPressed,
   });
 
   final RemoteCommand command;
   final bool enabled;
-  final Color accent;
   final bool isMode;
   final ValueChanged<RemoteCommand> onPressed;
 
@@ -175,31 +170,27 @@ class _RemoteButton extends StatelessWidget {
       child: FilledButton(
         onPressed: enabled ? () => onPressed(command) : null,
         style: FilledButton.styleFrom(
-          backgroundColor: isMode
-              ? const Color(0xFFD6E3F4)
-              : const Color(0xFFF7F8FA),
-          disabledBackgroundColor: isMode
-              ? const Color(0xFFD7DEE8)
-              : const Color(0xFFE8EBEF),
-          disabledForegroundColor: const Color(0xFF475569),
-          foregroundColor: isMode ? accent : const Color(0xFF050A10),
+          backgroundColor: const Color(0xFFF7F8FA),
+          disabledBackgroundColor: const Color(0xFFE8EBEF),
+          disabledForegroundColor: const Color(0xFF94A3B8),
+          foregroundColor: Colors.black,
           minimumSize: Size.zero,
           padding: const EdgeInsets.symmetric(horizontal: 8),
-          side: BorderSide(
-            color: isMode ? const Color(0xFF0753B7) : const Color(0xFFB5BBC3),
-            width: isMode ? 2 : 1.5,
-          ),
+          side: const BorderSide(color: Color(0xFFB5BBC3), width: 1.5),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           elevation: 0,
         ),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
+        child: Center(
           child: Text(
             command.name,
-            style: TextStyle(
-              fontSize: isMode ? 24 : 58,
+            maxLines: 1,
+            overflow: TextOverflow.visible,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.ibmPlexSansThai(
+              fontSize: isMode ? 32 : 44,
               fontWeight: FontWeight.w900,
               letterSpacing: 0,
+              height: 1,
             ),
           ),
         ),
