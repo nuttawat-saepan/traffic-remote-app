@@ -32,6 +32,11 @@ class _PairingScreenState extends State<PairingScreen> {
   _PairResponseSnapshot? _lastPairResponse;
 
   Future<void> _connectAndPair() async {
+    await widget.settingsService.clearPairing();
+    if (mounted) {
+      setState(() => _lastPairResponse = null);
+    }
+
     if (!widget.serialService.isConnected) {
       await widget.serialService.refreshDevices();
       if (widget.serialService.selectedDevice == null) {
@@ -50,11 +55,6 @@ class _PairingScreenState extends State<PairingScreen> {
   }
 
   Future<void> _startPairing() async {
-    await widget.settingsService.clearPairing();
-    if (mounted) {
-      setState(() => _lastPairResponse = null);
-    }
-
     final pairingMessage = 'PAIR:${widget.settings.appUuid}';
     final textCommand = _loraSendCommand(pairingMessage);
     final result = await widget.serialService.sendTextCommand(
@@ -148,7 +148,7 @@ class _PairingScreenState extends State<PairingScreen> {
     */
     final buttonLabel = isBusy ? 'กำลังเชื่อมต่อ' : 'เชื่อมต่อใหม่';
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -199,9 +199,8 @@ class _PairingScreenState extends State<PairingScreen> {
               ),
             ),
           ),
-          // const SizedBox(height: 28),
+          // const SizedBox(height: 12),
           // _PairResponseCard(snapshot: _lastPairResponse),
-          // const SizedBox(height: 22),
           const SizedBox(height: 12),
           const _PairSteps(),
         ],
@@ -287,7 +286,7 @@ class _PairSteps extends StatelessWidget {
           SizedBox(height: 8),
           _PairStepText('2. กดปุ่มเชื่อมต่อบนแอป'),
           SizedBox(height: 8),
-          _PairStepText('3. รอจนขึ้น Pair Response'),
+          _PairStepText('3. รอจนระบบแสดง "เชื่อมต่อแล้ว"'),
         ],
       ),
     );

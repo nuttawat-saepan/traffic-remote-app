@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -27,8 +29,10 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
   TrafficLogEntry? _latestLog;
   TopRemoteStatus _topStatus = TopRemoteStatus.ready;
   String? _lastSuccessfulCommandName;
+  String? _sendingCommandName;
   int _selectedIndex = 0;
   bool _ready = false;
+  Timer? _relativeTimeTimer;
 
   @override
   void initState() {
@@ -42,17 +46,24 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
     await _settingsService.load();
     await _serialService.refreshDevices();
     if (mounted) {
-      setState(() => _ready = true);
+      setState(() {
+        _ready = true;
+        if (!_settingsService.settings.isPaired) {
+          _selectedIndex = 1;
+        }
+      });
     }
   }
 
   @override
   void dispose() {
+    _relativeTimeTimer?.cancel();
     _serialService.dispose();
     super.dispose();
   }
 
   void _addLog(TrafficLogEntry entry) {
+    _startRelativeTimeTimer();
     setState(() {
       _logs.insert(0, entry);
       _latestLog = entry;
@@ -60,6 +71,9 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
         final status when status.name == 'success' => TopRemoteStatus.success,
         _ => TopRemoteStatus.noResponse,
       };
+      if (_sendingCommandName == entry.action) {
+        _sendingCommandName = null;
+      }
       if (entry.status == CommandResultStatus.success) {
         _lastSuccessfulCommandName = entry.action;
       }
@@ -67,6 +81,7 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
   }
 
   void _startCommand(String action) {
+    _startRelativeTimeTimer();
     setState(() {
       _latestLog = TrafficLogEntry(
         timestamp: DateTime.now(),
@@ -77,6 +92,15 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
         status: CommandResultStatus.success,
       );
       _topStatus = TopRemoteStatus.sending;
+      _sendingCommandName = action;
+    });
+  }
+
+  void _startRelativeTimeTimer() {
+    _relativeTimeTimer ??= Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _latestLog != null) {
+        setState(() {});
+      }
     });
   }
 
@@ -141,7 +165,7 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
               ]),
               builder: (context, _) {
                 final isConnected = _serialService.isConnected;
-                final canUseRemote = _selectedIndex >= 0;
+                final canUseRemote = _settingsService.settings.isPaired;
                 final selectedIndex = _selectedIndex;
                 final currentTopStatus = _serialService.isSending
                     ? TopRemoteStatus.sending
@@ -153,6 +177,7 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
                     onLog: _addLog,
                     onCommandStarted: _startCommand,
                     lastSuccessfulCommandName: _lastSuccessfulCommandName,
+                    sendingCommandName: _sendingCommandName,
                   ),
                   PairingScreen(
                     serialService: _serialService,
@@ -383,9 +408,10 @@ class _CommandStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final visual = _statusVisual(status);
     final entry = this.entry;
-    final details = entry == null
-        ? 'พร้อมส่งคำสั่ง'
-        : 'คำสั่ง ${entry.action} • ${_formatTime(entry.timestamp)}';
+    final details = entry == null ? 'พร้อมส่งคำสั่ง' : 'คำสั่ง ${entry.action}';
+    final relativeTime = entry == null
+        ? null
+        : _formatRelativeTime(DateTime.now().difference(entry.timestamp));
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 6),
@@ -440,6 +466,38 @@ class _CommandStatusCard extends StatelessWidget {
                 ],
               ),
             ),
+            if (relativeTime != null) ...[
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Text(
+                    'ส่งล่าสุด',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      color: visual.foreground,
+                      fontSize: 13,
+                      height: 1.1,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    relativeTime,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      color: visual.foreground,
+                      fontSize: 30,
+                      height: 1,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -474,7 +532,7 @@ class _CommandStatusCard extends StatelessWidget {
         );
       case TopRemoteStatus.noResponse:
         return const _StatusVisual(
-          label: 'ไม่ตอบกลับ',
+          label: 'ยังไม่ตอบกลับ',
           background: Color(0xFFFFE4E6),
           foreground: Color(0xFFB91C1C),
           iconBackground: Color(0xFFFFF1F2),
@@ -483,9 +541,20 @@ class _CommandStatusCard extends StatelessWidget {
     }
   }
 
-  String _formatTime(DateTime timestamp) {
-    String twoDigits(int value) => value.toString().padLeft(2, '0');
-    return '${twoDigits(timestamp.hour)}:${twoDigits(timestamp.minute)}:${twoDigits(timestamp.second)}';
+  String _formatRelativeTime(Duration elapsed) {
+    if (elapsed.isNegative) {
+      return '0 วินาที';
+    }
+    if (elapsed.inDays >= 1) {
+      return '${elapsed.inDays} วัน';
+    }
+    if (elapsed.inHours >= 1) {
+      return '${elapsed.inHours} ชั่วโมง';
+    }
+    if (elapsed.inMinutes >= 1) {
+      return '${elapsed.inMinutes} นาที';
+    }
+    return '${elapsed.inSeconds} วินาที';
   }
 }
 

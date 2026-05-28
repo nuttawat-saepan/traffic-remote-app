@@ -21,11 +21,11 @@ RemoteCommand loraAtCommand({
   required String hexPayload,
   required String expectedResponse,
 }) {
-  final dataLength = hexPayload.length;
+  final payload = hexPayload.replaceAll(RegExp(r'\s+'), '');
 
   return RemoteCommand(
     name: name,
-    payload: 'AT+SEND=$loraTargetAddress,$dataLength,$hexPayload',
+    payload: payload,
     expectedResponse: expectedResponse,
     type: RemoteCommandType.text,
   );

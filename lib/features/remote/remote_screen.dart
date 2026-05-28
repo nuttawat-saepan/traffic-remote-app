@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../logs/log_model.dart';
+import '../serial/serial_models.dart';
 import '../serial/serial_service.dart';
 import '../settings/settings_service.dart';
 import 'command_model.dart';
@@ -14,6 +17,7 @@ class RemoteScreen extends StatefulWidget {
     required this.onLog,
     required this.onCommandStarted,
     required this.lastSuccessfulCommandName,
+    required this.sendingCommandName,
   });
 
   final SerialService serialService;
@@ -21,6 +25,7 @@ class RemoteScreen extends StatefulWidget {
   final ValueChanged<TrafficLogEntry> onLog;
   final ValueChanged<String> onCommandStarted;
   final String? lastSuccessfulCommandName;
+  final String? sendingCommandName;
 
   @override
   State<RemoteScreen> createState() => _RemoteScreenState();
@@ -30,6 +35,20 @@ class _RemoteScreenState extends State<RemoteScreen> {
   Future<void> _sendRemoteCommand(RemoteCommand command) async {
     widget.onCommandStarted(command.name);
 
+    if (!widget.serialService.isConnected) {
+      await widget.serialService.refreshDevices();
+      if (widget.serialService.selectedDevice == null) {
+        _logCommandError(command, 'No USB serial device connected.');
+        return;
+      }
+
+      await widget.serialService.connect(baudRate: widget.settings.baudRate);
+      if (!widget.serialService.isConnected) {
+        _logCommandError(command, widget.serialService.statusMessage);
+        return;
+      }
+    }
+
     final result = switch (command.type) {
       RemoteCommandType.hex => await widget.serialService.sendHexCommand(
         hexCommand: command.payload,
@@ -37,7 +56,7 @@ class _RemoteScreenState extends State<RemoteScreen> {
         timeout: widget.settings.timeout,
       ),
       RemoteCommandType.text => await widget.serialService.sendTextCommand(
-        textCommand: command.payload,
+        textCommand: _loraSendCommand(command.payload),
         expectedResponse: command.expectedResponse,
         timeout: widget.settings.timeout,
       ),
@@ -55,10 +74,28 @@ class _RemoteScreenState extends State<RemoteScreen> {
     );
   }
 
+  void _logCommandError(RemoteCommand command, String message) {
+    widget.onLog(
+      TrafficLogEntry(
+        timestamp: DateTime.now(),
+        action: command.name,
+        sentCommand: '',
+        receivedText: message,
+        receivedRawHex: '',
+        status: CommandResultStatus.error,
+      ),
+    );
+  }
+
+  String _loraSendCommand(String protocol) {
+    final payload = 'ID:${widget.settings.appUuid},$protocol';
+    final length = utf8.encode(payload).length;
+    return 'AT+SEND=$loraTargetAddress,$length,$payload';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final canSend =
-        widget.serialService.isConnected && !widget.serialService.isSending;
+    final canSend = widget.settings.isPaired && !widget.serialService.isSending;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 10, 14, 18),
@@ -68,6 +105,7 @@ class _RemoteScreenState extends State<RemoteScreen> {
             child: _ModeButtons(
               enabled: canSend,
               lastSuccessfulCommandName: widget.lastSuccessfulCommandName,
+              sendingCommandName: widget.sendingCommandName,
               onPressed: _sendRemoteCommand,
             ),
           ),
@@ -88,6 +126,7 @@ class _RemoteScreenState extends State<RemoteScreen> {
               commands: numberCommands.sublist(index, index + 2),
               enabled: canSend,
               lastSuccessfulCommandName: widget.lastSuccessfulCommandName,
+              sendingCommandName: widget.sendingCommandName,
               onPressed: _sendRemoteCommand,
             ),
           ),
@@ -103,11 +142,13 @@ class _ModeButtons extends StatelessWidget {
   const _ModeButtons({
     required this.enabled,
     required this.lastSuccessfulCommandName,
+    required this.sendingCommandName,
     required this.onPressed,
   });
 
   final bool enabled;
   final String? lastSuccessfulCommandName;
+  final String? sendingCommandName;
   final ValueChanged<RemoteCommand> onPressed;
 
   @override
@@ -116,6 +157,7 @@ class _ModeButtons extends StatelessWidget {
       commands: modeCommands,
       enabled: enabled,
       lastSuccessfulCommandName: lastSuccessfulCommandName,
+      sendingCommandName: sendingCommandName,
       isMode: true,
       onPressed: onPressed,
     );
@@ -127,6 +169,7 @@ class _CommandRow extends StatelessWidget {
     required this.commands,
     required this.enabled,
     required this.lastSuccessfulCommandName,
+    required this.sendingCommandName,
     required this.onPressed,
     this.isMode = false,
   });
@@ -134,6 +177,7 @@ class _CommandRow extends StatelessWidget {
   final List<RemoteCommand> commands;
   final bool enabled;
   final String? lastSuccessfulCommandName;
+  final String? sendingCommandName;
   final bool isMode;
   final ValueChanged<RemoteCommand> onPressed;
 
@@ -146,6 +190,7 @@ class _CommandRow extends StatelessWidget {
             child: _RemoteButton(
               command: commands[index],
               enabled: enabled,
+              sending: commands[index].name == sendingCommandName,
               highlighted: commands[index].name == lastSuccessfulCommandName,
               isMode: isMode,
               onPressed: onPressed,
@@ -162,6 +207,7 @@ class _RemoteButton extends StatelessWidget {
   const _RemoteButton({
     required this.command,
     required this.enabled,
+    required this.sending,
     required this.highlighted,
     required this.isMode,
     required this.onPressed,
@@ -169,12 +215,29 @@ class _RemoteButton extends StatelessWidget {
 
   final RemoteCommand command;
   final bool enabled;
+  final bool sending;
   final bool highlighted;
   final bool isMode;
   final ValueChanged<RemoteCommand> onPressed;
 
   @override
   Widget build(BuildContext context) {
+    final backgroundColor = sending
+        ? const Color(0xFFFFE4E6)
+        : highlighted
+        ? const Color(0xFFE7F0FF)
+        : const Color(0xFFF7F8FA);
+    final foregroundColor = sending
+        ? const Color(0xFFB91C1C)
+        : highlighted
+        ? const Color(0xFF0D4EAE)
+        : Colors.black;
+    final borderColor = sending
+        ? const Color(0xFFDC2626)
+        : highlighted
+        ? const Color(0xFF0D4EAE)
+        : const Color(0xFFB5BBC3);
+
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
@@ -189,20 +252,20 @@ class _RemoteButton extends StatelessWidget {
       child: FilledButton(
         onPressed: enabled ? () => onPressed(command) : null,
         style: FilledButton.styleFrom(
-          backgroundColor: highlighted
-              ? const Color(0xFFE7F0FF)
-              : const Color(0xFFF7F8FA),
-          disabledBackgroundColor: const Color(0xFFE8EBEF),
-          disabledForegroundColor: const Color(0xFF94A3B8),
-          foregroundColor: highlighted ? const Color(0xFF0D4EAE) : Colors.black,
-          overlayColor: const Color(0xFF0D4EAE),
+          backgroundColor: backgroundColor,
+          disabledBackgroundColor: sending
+              ? const Color(0xFFFFE4E6)
+              : const Color(0xFFE8EBEF),
+          disabledForegroundColor: sending
+              ? const Color(0xFFB91C1C)
+              : const Color(0xFF94A3B8),
+          foregroundColor: foregroundColor,
+          overlayColor: const Color(0xFF00810E),
           minimumSize: Size.zero,
           padding: const EdgeInsets.symmetric(horizontal: 8),
           side: BorderSide(
-            color: highlighted
-                ? const Color(0xFF0D4EAE)
-                : const Color(0xFFB5BBC3),
-            width: highlighted ? 2 : 1.5,
+            color: borderColor,
+            width: sending || highlighted ? 2 : 1.5,
           ),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           elevation: 0,
