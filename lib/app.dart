@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'features/logs/log_model.dart';
 import 'features/pairing/pairing_screen.dart';
 import 'features/remote/remote_screen.dart';
+import 'features/serial/serial_models.dart';
 import 'features/serial/serial_service.dart';
 import 'features/settings/settings_service.dart';
 
@@ -25,6 +26,7 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
   final List<TrafficLogEntry> _logs = <TrafficLogEntry>[];
   TrafficLogEntry? _latestLog;
   TopRemoteStatus _topStatus = TopRemoteStatus.ready;
+  String? _lastSuccessfulCommandName;
   int _selectedIndex = 0;
   bool _ready = false;
 
@@ -58,6 +60,23 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
         final status when status.name == 'success' => TopRemoteStatus.success,
         _ => TopRemoteStatus.noResponse,
       };
+      if (entry.status == CommandResultStatus.success) {
+        _lastSuccessfulCommandName = entry.action;
+      }
+    });
+  }
+
+  void _startCommand(String action) {
+    setState(() {
+      _latestLog = TrafficLogEntry(
+        timestamp: DateTime.now(),
+        action: action,
+        sentCommand: '',
+        receivedText: '',
+        receivedRawHex: '',
+        status: CommandResultStatus.success,
+      );
+      _topStatus = TopRemoteStatus.sending;
     });
   }
 
@@ -132,6 +151,8 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
                     serialService: _serialService,
                     settings: _settingsService.settings,
                     onLog: _addLog,
+                    onCommandStarted: _startCommand,
+                    lastSuccessfulCommandName: _lastSuccessfulCommandName,
                   ),
                   PairingScreen(
                     serialService: _serialService,
@@ -149,11 +170,10 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
                           serialService: _serialService,
                           isPaired: _settingsService.settings.isPaired,
                         ),
-                        if (selectedIndex == 0)
-                          _CommandStatusCard(
-                            status: currentTopStatus,
-                            entry: _latestLog,
-                          ),
+                        _CommandStatusCard(
+                          status: currentTopStatus,
+                          entry: _latestLog,
+                        ),
                         Expanded(child: pages[selectedIndex]),
                       ],
                     ),
@@ -220,8 +240,8 @@ class _BottomNav extends StatelessWidget {
               onTap: () => onSelected(0),
             ),
             _BottomNavItem(
-              icon: Icons.bluetooth,
-              selectedIcon: Icons.bluetooth,
+              icon: Icons.sync,
+              selectedIcon: Icons.sync,
               label: 'เชื่อมต่อ',
               selected: selectedIndex == 1,
               enabled: true,
@@ -274,17 +294,25 @@ class _BottomNavItem extends StatelessWidget {
                   ? const Color(0xFF0D4EAE)
                   : Colors.transparent,
             ),
-            const SizedBox(height: 18),
-            Icon(selected ? selectedIcon : icon, color: color, size: 31),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 17,
-                height: 1,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0,
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  Icon(selected ? selectedIcon : icon, color: color, size: 30),
+                  Transform.translate(
+                    offset: const Offset(0, -2),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 17,
+                        height: 1,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -305,7 +333,7 @@ class _ConnectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final connected = serialService.isConnected;
+    final connected = isPaired;
 
     return Container(
       width: double.infinity,

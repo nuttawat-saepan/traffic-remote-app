@@ -12,11 +12,15 @@ class RemoteScreen extends StatefulWidget {
     required this.serialService,
     required this.settings,
     required this.onLog,
+    required this.onCommandStarted,
+    required this.lastSuccessfulCommandName,
   });
 
   final SerialService serialService;
   final TrafficSettings settings;
   final ValueChanged<TrafficLogEntry> onLog;
+  final ValueChanged<String> onCommandStarted;
+  final String? lastSuccessfulCommandName;
 
   @override
   State<RemoteScreen> createState() => _RemoteScreenState();
@@ -24,6 +28,8 @@ class RemoteScreen extends StatefulWidget {
 
 class _RemoteScreenState extends State<RemoteScreen> {
   Future<void> _sendRemoteCommand(RemoteCommand command) async {
+    widget.onCommandStarted(command.name);
+
     final result = switch (command.type) {
       RemoteCommandType.hex => await widget.serialService.sendHexCommand(
         hexCommand: command.payload,
@@ -61,6 +67,7 @@ class _RemoteScreenState extends State<RemoteScreen> {
           Expanded(
             child: _ModeButtons(
               enabled: canSend,
+              lastSuccessfulCommandName: widget.lastSuccessfulCommandName,
               onPressed: _sendRemoteCommand,
             ),
           ),
@@ -80,6 +87,7 @@ class _RemoteScreenState extends State<RemoteScreen> {
             child: _CommandRow(
               commands: numberCommands.sublist(index, index + 2),
               enabled: canSend,
+              lastSuccessfulCommandName: widget.lastSuccessfulCommandName,
               onPressed: _sendRemoteCommand,
             ),
           ),
@@ -92,9 +100,14 @@ class _RemoteScreenState extends State<RemoteScreen> {
 }
 
 class _ModeButtons extends StatelessWidget {
-  const _ModeButtons({required this.enabled, required this.onPressed});
+  const _ModeButtons({
+    required this.enabled,
+    required this.lastSuccessfulCommandName,
+    required this.onPressed,
+  });
 
   final bool enabled;
+  final String? lastSuccessfulCommandName;
   final ValueChanged<RemoteCommand> onPressed;
 
   @override
@@ -102,6 +115,7 @@ class _ModeButtons extends StatelessWidget {
     return _CommandRow(
       commands: modeCommands,
       enabled: enabled,
+      lastSuccessfulCommandName: lastSuccessfulCommandName,
       isMode: true,
       onPressed: onPressed,
     );
@@ -112,12 +126,14 @@ class _CommandRow extends StatelessWidget {
   const _CommandRow({
     required this.commands,
     required this.enabled,
+    required this.lastSuccessfulCommandName,
     required this.onPressed,
     this.isMode = false,
   });
 
   final List<RemoteCommand> commands;
   final bool enabled;
+  final String? lastSuccessfulCommandName;
   final bool isMode;
   final ValueChanged<RemoteCommand> onPressed;
 
@@ -130,6 +146,7 @@ class _CommandRow extends StatelessWidget {
             child: _RemoteButton(
               command: commands[index],
               enabled: enabled,
+              highlighted: commands[index].name == lastSuccessfulCommandName,
               isMode: isMode,
               onPressed: onPressed,
             ),
@@ -145,12 +162,14 @@ class _RemoteButton extends StatelessWidget {
   const _RemoteButton({
     required this.command,
     required this.enabled,
+    required this.highlighted,
     required this.isMode,
     required this.onPressed,
   });
 
   final RemoteCommand command;
   final bool enabled;
+  final bool highlighted;
   final bool isMode;
   final ValueChanged<RemoteCommand> onPressed;
 
@@ -170,27 +189,38 @@ class _RemoteButton extends StatelessWidget {
       child: FilledButton(
         onPressed: enabled ? () => onPressed(command) : null,
         style: FilledButton.styleFrom(
-          backgroundColor: const Color(0xFFF7F8FA),
+          backgroundColor: highlighted
+              ? const Color(0xFFE7F0FF)
+              : const Color(0xFFF7F8FA),
           disabledBackgroundColor: const Color(0xFFE8EBEF),
           disabledForegroundColor: const Color(0xFF94A3B8),
-          foregroundColor: Colors.black,
+          foregroundColor: highlighted ? const Color(0xFF0D4EAE) : Colors.black,
+          overlayColor: const Color(0xFF0D4EAE),
           minimumSize: Size.zero,
           padding: const EdgeInsets.symmetric(horizontal: 8),
-          side: const BorderSide(color: Color(0xFFB5BBC3), width: 1.5),
+          side: BorderSide(
+            color: highlighted
+                ? const Color(0xFF0D4EAE)
+                : const Color(0xFFB5BBC3),
+            width: highlighted ? 2 : 1.5,
+          ),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           elevation: 0,
         ),
         child: Center(
-          child: Text(
-            command.name,
-            maxLines: 1,
-            overflow: TextOverflow.visible,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.ibmPlexSansThai(
-              fontSize: isMode ? 32 : 44,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0,
-              height: 1,
+          child: Transform.translate(
+            offset: const Offset(0, 4),
+            child: Text(
+              command.name,
+              maxLines: 1,
+              overflow: TextOverflow.visible,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.ibmPlexSansThai(
+                fontSize: isMode ? 32 : 40,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0,
+                height: 1,
+              ),
             ),
           ),
         ),

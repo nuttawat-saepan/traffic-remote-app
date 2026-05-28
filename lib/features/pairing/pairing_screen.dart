@@ -28,6 +28,7 @@ class PairingScreen extends StatefulWidget {
 }
 
 class _PairingScreenState extends State<PairingScreen> {
+  // ignore: unused_field
   _PairResponseSnapshot? _lastPairResponse;
 
   Future<void> _connectAndPair() async {
@@ -49,6 +50,11 @@ class _PairingScreenState extends State<PairingScreen> {
   }
 
   Future<void> _startPairing() async {
+    await widget.settingsService.clearPairing();
+    if (mounted) {
+      setState(() => _lastPairResponse = null);
+    }
+
     final pairingMessage = 'PAIR:${widget.settings.appUuid}';
     final textCommand = _loraSendCommand(pairingMessage);
     final result = await widget.serialService.sendTextCommand(
@@ -124,6 +130,7 @@ class _PairingScreenState extends State<PairingScreen> {
   @override
   Widget build(BuildContext context) {
     final isBusy = widget.serialService.isSending;
+    /*
     final isReady =
         widget.serialService.isConnected && widget.settings.isPaired;
     final connected = widget.serialService.isConnected;
@@ -138,11 +145,14 @@ class _PairingScreenState extends State<PairingScreen> {
     final signalText = isReady ? 'สัญญาณดี • พร้อมรับคำสั่ง' : 'รอการจับคู่';
     final buttonLabel = isBusy ? 'กำลังเชื่อมต่อ' : 'เชื่อมต่อใหม่';
 
+    */
+    final buttonLabel = isBusy ? 'กำลังเชื่อมต่อ' : 'เชื่อมต่อใหม่';
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
+          /*
           _PairInfoCard(
             connected: isReady,
             title: statusTitle,
@@ -150,6 +160,7 @@ class _PairingScreenState extends State<PairingScreen> {
             signalText: signalText,
           ),
           const SizedBox(height: 26),
+          */
           SizedBox(
             height: 96,
             child: FilledButton(
@@ -169,10 +180,10 @@ class _PairingScreenState extends State<PairingScreen> {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  const Icon(Icons.bluetooth, size: 42),
+                  const Icon(Icons.sync, size: 42),
                   const SizedBox(width: 10),
                   Transform.translate(
-                    offset: const Offset(0, 2),
+                    offset: const Offset(0, 4),
                     child: Text(
                       buttonLabel,
                       textAlign: TextAlign.center,
@@ -188,19 +199,11 @@ class _PairingScreenState extends State<PairingScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 28),
-          _PairResponseCard(snapshot: _lastPairResponse),
-          const SizedBox(height: 22),
-          const Text(
-            'เชื่อมต่อใหม่โดยกดปุ่มบนกล่อง ตามด้วยกดปุ่มเชื่อมต่อบนแอป',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.black,
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0,
-            ),
-          ),
+          // const SizedBox(height: 28),
+          // _PairResponseCard(snapshot: _lastPairResponse),
+          // const SizedBox(height: 22),
+          const SizedBox(height: 12),
+          const _PairSteps(),
         ],
       ),
     );
@@ -263,6 +266,55 @@ class _PairingScreenState extends State<PairingScreen> {
   }
 }
 
+class _PairSteps extends StatelessWidget {
+  const _PairSteps();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F8FA),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFB5BBC3), width: 1.5),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          _PairStepText('วิธีการเชื่อมต่อ', isTitle: true),
+          SizedBox(height: 10),
+          _PairStepText('1. กดปุ่มบนกล่อง'),
+          SizedBox(height: 8),
+          _PairStepText('2. กดปุ่มเชื่อมต่อบนแอป'),
+          SizedBox(height: 8),
+          _PairStepText('3. รอจนขึ้น Pair Response'),
+        ],
+      ),
+    );
+  }
+}
+
+class _PairStepText extends StatelessWidget {
+  const _PairStepText(this.text, {this.isTitle = false});
+
+  final String text;
+  final bool isTitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: TextStyle(
+        color: Colors.black,
+        fontSize: isTitle ? 19 : 17,
+        fontWeight: isTitle ? FontWeight.w900 : FontWeight.w800,
+        letterSpacing: 0,
+        height: 1.2,
+      ),
+    );
+  }
+}
+
 class _PairResponseSnapshot {
   const _PairResponseSnapshot({
     required this.timestamp,
@@ -281,6 +333,7 @@ class _PairResponseSnapshot {
   final CommandResultStatus status;
 }
 
+// ignore: unused_element
 class _PairResponseCard extends StatelessWidget {
   const _PairResponseCard({required this.snapshot});
 
@@ -426,6 +479,7 @@ class _PairResponseLine extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _PairInfoCard extends StatelessWidget {
   const _PairInfoCard({
     required this.connected,
