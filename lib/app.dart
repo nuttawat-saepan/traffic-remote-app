@@ -408,7 +408,10 @@ class _CommandStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final visual = _statusVisual(status);
     final entry = this.entry;
-    final details = entry == null ? 'พร้อมส่งคำสั่ง' : 'คำสั่ง ${entry.action}';
+    final isReady = status == TopRemoteStatus.ready;
+    final details = entry == null
+        ? 'พร้อมส่งคำสั่ง'
+        : 'คำสั่ง ${_formatActionLabel(entry.action)}';
     final relativeTime = entry == null
         ? null
         : _formatRelativeTime(DateTime.now().difference(entry.timestamp));
@@ -437,34 +440,47 @@ class _CommandStatusCard extends StatelessWidget {
             ),
             const SizedBox(width: 14),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    visual.label,
-                    style: TextStyle(
-                      color: visual.foreground,
-                      fontSize: 20,
-                      height: 1.05,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0,
+              child: isReady
+                  ? Text(
+                      'พร้อมส่งคำสั่ง',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: visual.foreground,
+                        fontSize: 20,
+                        height: 1.05,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0,
+                      ),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        const SizedBox(height: 4),
+                        Text(
+                          details,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: visual.foreground,
+                            fontSize: 15,
+                            height: 1.1,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                        Text(
+                          visual.label,
+                          style: TextStyle(
+                            color: visual.foreground,
+                            fontSize: 20,
+                            height: 1.05,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    details,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: visual.foreground,
-                      fontSize: 15,
-                      height: 1.1,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                ],
-              ),
             ),
             if (relativeTime != null) ...[
               const SizedBox(width: 12),
@@ -473,7 +489,7 @@ class _CommandStatusCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
                   Text(
-                    'ส่งล่าสุด',
+                    'Operation time',
                     textAlign: TextAlign.right,
                     style: TextStyle(
                       color: visual.foreground,
@@ -504,11 +520,19 @@ class _CommandStatusCard extends StatelessWidget {
     );
   }
 
+  String _formatActionLabel(String action) {
+    final numericAction = int.tryParse(action);
+    if (numericAction != null && numericAction >= 1 && numericAction <= 8) {
+      return 'โปรแกรม $action';
+    }
+    return action;
+  }
+
   _StatusVisual _statusVisual(TopRemoteStatus status) {
     switch (status) {
       case TopRemoteStatus.ready:
         return const _StatusVisual(
-          label: 'พร้อม',
+          label: 'พร้อมส่งคำสั่ง',
           background: Color(0xFFE8F6ED),
           foreground: appGreen,
           iconBackground: Color(0xFFE8F6ED),
@@ -543,18 +567,17 @@ class _CommandStatusCard extends StatelessWidget {
 
   String _formatRelativeTime(Duration elapsed) {
     if (elapsed.isNegative) {
-      return '0 วินาที';
+      return '00:00:00';
     }
-    if (elapsed.inDays >= 1) {
-      return '${elapsed.inDays} วัน';
-    }
-    if (elapsed.inHours >= 1) {
-      return '${elapsed.inHours} ชั่วโมง';
-    }
-    if (elapsed.inMinutes >= 1) {
-      return '${elapsed.inMinutes} นาที';
-    }
-    return '${elapsed.inSeconds} วินาที';
+
+    final cappedSeconds = elapsed.inSeconds.clamp(0, 359999);
+    final hours = cappedSeconds ~/ 3600;
+    final minutes = (cappedSeconds % 3600) ~/ 60;
+    final seconds = cappedSeconds % 60;
+
+    return '${hours.toString().padLeft(2, '0')}:'
+        '${minutes.toString().padLeft(2, '0')}:'
+        '${seconds.toString().padLeft(2, '0')}';
   }
 }
 
