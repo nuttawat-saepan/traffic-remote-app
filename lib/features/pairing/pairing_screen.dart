@@ -59,7 +59,7 @@ class _PairingScreenState extends State<PairingScreen> {
     final textCommand = _loraSendCommand(pairingMessage);
     final result = await widget.serialService.sendTextCommand(
       textCommand: textCommand,
-      expectedResponse: '+RCV=',
+      expectedResponse: 'PAIR_OK',
       timeout: widget.settings.timeout,
     );
     final responseText = result.errorMessage ?? result.responseText;
@@ -161,46 +161,13 @@ class _PairingScreenState extends State<PairingScreen> {
           ),
           const SizedBox(height: 26),
           */
-          SizedBox(
-            height: 96,
-            child: FilledButton(
-              onPressed: isBusy ? null : _connectAndPair,
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF0D4EAE),
-                disabledBackgroundColor: const Color(0xFFCBD5E1),
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shadowColor: const Color(0x99000000),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  const Icon(Icons.sync, size: 42),
-                  const SizedBox(width: 10),
-                  Transform.translate(
-                    offset: const Offset(0, 4),
-                    child: Text(
-                      buttonLabel,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.ibmPlexSansThai(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0,
-                        height: 1,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          _ReconnectButton(
+            label: buttonLabel,
+            enabled: !isBusy,
+            onPressed: _connectAndPair,
           ),
-          // const SizedBox(height: 12),
-          // _PairResponseCard(snapshot: _lastPairResponse),
+          const SizedBox(height: 12),
+          _PairResponseCard(snapshot: _lastPairResponse),
           const SizedBox(height: 12),
           const _PairSteps(),
         ],
@@ -222,9 +189,22 @@ class _PairingScreenState extends State<PairingScreen> {
     final lines = normalized
         .split(RegExp(r'[\r\n]+'))
         .map((line) => line.trim())
-        .where((line) => line.isNotEmpty);
+        .where((line) => line.isNotEmpty)
+        .toList();
     for (final line in lines) {
-      if (line.toUpperCase().contains('PAIR')) {
+      final upperLine = line.toUpperCase();
+      if (upperLine.contains('+RCV=') && upperLine.contains('PAIR')) {
+        return line;
+      }
+    }
+    for (final line in lines) {
+      if (line.toUpperCase().contains('PAIR_OK')) {
+        return line;
+      }
+    }
+    for (final line in lines) {
+      final upperLine = line.toUpperCase();
+      if (upperLine.contains('PAIR') && !upperLine.contains('AT+SEND')) {
         return line;
       }
     }
@@ -262,6 +242,139 @@ class _PairingScreenState extends State<PairingScreen> {
     }
 
     return null;
+  }
+}
+
+class _ReconnectButton extends StatefulWidget {
+  const _ReconnectButton({
+    required this.label,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  State<_ReconnectButton> createState() => _ReconnectButtonState();
+}
+
+class _ReconnectButtonState extends State<_ReconnectButton> {
+  bool _pressed = false;
+
+  void _setPressed(bool pressed) {
+    if (_pressed == pressed) {
+      return;
+    }
+    setState(() => _pressed = pressed);
+  }
+
+  void _handleTapUp(TapUpDetails details) {
+    if (!widget.enabled) {
+      return;
+    }
+    _setPressed(false);
+    widget.onPressed();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final borderRadius = BorderRadius.circular(8);
+    final backgroundColor = widget.enabled
+        ? const Color(0xFF0D4EAE)
+        : const Color(0xFFCBD5E1);
+
+    return Semantics(
+      button: true,
+      enabled: widget.enabled,
+      label: widget.label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: widget.enabled ? (_) => _setPressed(true) : null,
+        onTapUp: widget.enabled ? _handleTapUp : null,
+        onTapCancel: widget.enabled ? () => _setPressed(false) : null,
+        child: TweenAnimationBuilder<double>(
+          tween: Tween<double>(begin: 0, end: _pressed ? 1 : 0),
+          duration: const Duration(milliseconds: 80),
+          curve: Curves.easeOut,
+          builder: (context, yOffset, child) {
+            return Transform.translate(
+              offset: Offset(0, yOffset),
+              child: child,
+            );
+          },
+          child: AnimatedContainer(
+            height: 96,
+            duration: const Duration(milliseconds: 80),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              borderRadius: borderRadius,
+              boxShadow: const <BoxShadow>[
+                BoxShadow(
+                  color: Color(0x66000000),
+                  offset: Offset(0, 2),
+                  blurRadius: 6,
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: borderRadius,
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: backgroundColor,
+                      borderRadius: borderRadius,
+                    ),
+                  ),
+                  const Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 1,
+                    child: ColoredBox(color: Color(0x0FFFFFFF)),
+                  ),
+                  const Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: -1,
+                    height: 2,
+                    child: ColoredBox(color: Color(0x59000000)),
+                  ),
+                  Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        const Icon(Icons.sync, color: Colors.white, size: 42),
+                        const SizedBox(width: 10),
+                        Transform.translate(
+                          offset: const Offset(0, 4),
+                          child: Text(
+                            widget.label,
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.ibmPlexSansThai(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

@@ -347,7 +347,7 @@ class _BottomNavItem extends StatelessWidget {
   }
 }
 
-class _ConnectionHeader extends StatelessWidget {
+class _ConnectionHeader extends StatefulWidget {
   const _ConnectionHeader({
     required this.serialService,
     required this.isPaired,
@@ -357,12 +357,49 @@ class _ConnectionHeader extends StatelessWidget {
   final bool isPaired;
 
   @override
+  State<_ConnectionHeader> createState() => _ConnectionHeaderState();
+}
+
+class _ConnectionHeaderState extends State<_ConnectionHeader>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1300),
+    );
+    if (widget.isPaired) {
+      _pulseController.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _ConnectionHeader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isPaired && !_pulseController.isAnimating) {
+      _pulseController.repeat();
+    } else if (!widget.isPaired && _pulseController.isAnimating) {
+      _pulseController.stop();
+      _pulseController.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final connected = isPaired;
+    final connected = widget.isPaired;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       decoration: BoxDecoration(
         color: connected ? appGreen : appRed,
         border: Border(
@@ -372,26 +409,83 @@ class _ConnectionHeader extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
-          Container(
-            width: 23,
-            height: 23,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: connected ? Colors.white : const Color(0xFFFFCDD2),
-              border: Border.all(color: const Color(0xAAFFFFFF), width: 4),
+          Transform.translate(
+            offset: const Offset(0, 2),
+            child: _ConnectionDot(
+              connected: connected,
+              pulseController: _pulseController,
             ),
           ),
           const SizedBox(width: 10),
-          Text(
-            connected ? 'เชื่อมต่อแล้ว' : 'ยังไม่เชื่อมต่อ',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 26,
-              height: 1.05,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0,
+          Transform.translate(
+            offset: const Offset(0, 2),
+            child: Text(
+              connected ? 'เชื่อมต่อแล้ว' : 'ยังไม่เชื่อมต่อ',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                height: 1.05,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0,
+              ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConnectionDot extends StatelessWidget {
+  const _ConnectionDot({
+    required this.connected,
+    required this.pulseController,
+  });
+
+  final bool connected;
+  final Animation<double> pulseController;
+
+  @override
+  Widget build(BuildContext context) {
+    final dot = Container(
+      width: 16,
+      height: 16,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: connected ? Colors.white : const Color(0xFFFFCDD2),
+        border: Border.all(color: const Color(0xAAFFFFFF), width: 4),
+      ),
+    );
+
+    if (!connected) {
+      return dot;
+    }
+
+    return SizedBox(
+      width: 34,
+      height: 34,
+      child: Stack(
+        alignment: Alignment.center,
+        children: <Widget>[
+          FadeTransition(
+            opacity: Tween<double>(begin: 0.55, end: 0).animate(
+              CurvedAnimation(parent: pulseController, curve: Curves.easeOut),
+            ),
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.75, end: 1.35).animate(
+                CurvedAnimation(parent: pulseController, curve: Curves.easeOut),
+              ),
+              child: Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 3),
+                ),
+              ),
+            ),
+          ),
+          dot,
         ],
       ),
     );
