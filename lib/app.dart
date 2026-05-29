@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'features/logs/log_model.dart';
+import 'features/kiosk/kiosk_service.dart';
 import 'features/pairing/pairing_screen.dart';
 import 'features/remote/remote_screen.dart';
 import 'features/serial/serial_models.dart';
@@ -23,16 +24,23 @@ class TrafficRemoteApp extends StatefulWidget {
 }
 
 class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
+  static const _adminPin = '2580';
+
   late final SettingsService _settingsService;
   late final SerialService _serialService;
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   final List<TrafficLogEntry> _logs = <TrafficLogEntry>[];
   TrafficLogEntry? _latestLog;
   TopRemoteStatus _topStatus = TopRemoteStatus.ready;
   String? _lastSuccessfulCommandName;
   String? _sendingCommandName;
   int _selectedIndex = 0;
+  int _adminTapCount = 0;
   bool _ready = false;
+  bool _startKioskPromptShown = false;
   Timer? _relativeTimeTimer;
+  Timer? _adminTapTimer;
 
   @override
   void initState() {
@@ -58,8 +66,141 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
   @override
   void dispose() {
     _relativeTimeTimer?.cancel();
+    _adminTapTimer?.cancel();
     _serialService.dispose();
     super.dispose();
+  }
+
+  void _handleAdminSecretTap() {
+    _adminTapTimer?.cancel();
+    _adminTapCount += 1;
+
+    if (_adminTapCount >= 7) {
+      _adminTapCount = 0;
+      _showAdminDialog();
+      return;
+    }
+
+    _adminTapTimer = Timer(const Duration(seconds: 3), () {
+      _adminTapCount = 0;
+    });
+  }
+
+  Future<void> _showAdminDialog() async {
+    final enteredCorrectPin = await _showPinDialog(
+      title: 'Admin',
+      actionLabel: 'ปลดล็อก',
+    );
+
+    if (!mounted || enteredCorrectPin == null) {
+      return;
+    }
+
+    final unlocked = await KioskService.stopKiosk();
+    if (!mounted) {
+      return;
+    }
+
+    _showSnackBar(
+      unlocked ? 'ปลดล็อก Kiosk Mode แล้ว' : 'ออกจากโหมดผู้ดูแลแล้ว',
+    );
+  }
+
+  Future<void> _showStartKioskDialog() async {
+    final enteredCorrectPin = await _showPinDialog(
+      title: 'เริ่ม Kiosk Mode',
+      actionLabel: 'เริ่ม',
+      barrierDismissible: false,
+    );
+
+    if (!mounted || enteredCorrectPin != true) {
+      return;
+    }
+
+    final started = await KioskService.startKiosk();
+    if (!mounted) {
+      return;
+    }
+
+    _showSnackBar(started ? 'เริ่ม Kiosk Mode แล้ว' : 'เข้าสู่โหมดใช้งานแล้ว');
+  }
+
+  Future<bool?> _showPinDialog({
+    required String title,
+    required String actionLabel,
+    bool barrierDismissible = true,
+  }) async {
+    final dialogContext = _navigatorKey.currentContext;
+    if (dialogContext == null) {
+      return null;
+    }
+
+    final controller = TextEditingController();
+    final enteredCorrectPin = await showDialog<bool>(
+      context: dialogContext,
+      barrierDismissible: barrierDismissible,
+      builder: (context) {
+        String? errorText;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            void submit() {
+              if (controller.text == _adminPin) {
+                Navigator.of(context).pop(true);
+                return;
+              }
+
+              controller.clear();
+              setDialogState(() {
+                errorText = 'PIN ไม่ถูกต้อง';
+              });
+            }
+
+            return AlertDialog(
+              title: Text(title),
+              content: TextField(
+                controller: controller,
+                obscureText: true,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: 'PIN',
+                  errorText: errorText,
+                ),
+                onSubmitted: (_) => submit(),
+              ),
+              actions: <Widget>[
+                if (barrierDismissible)
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('ยกเลิก'),
+                  ),
+                FilledButton(onPressed: submit, child: Text(actionLabel)),
+              ],
+            );
+          },
+        );
+      },
+    );
+    controller.dispose();
+    return enteredCorrectPin;
+  }
+
+  void _showSnackBar(String message) {
+    final scaffoldMessenger = _scaffoldMessengerKey.currentState;
+    if (scaffoldMessenger == null) {
+      return;
+    }
+
+    scaffoldMessenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
   }
 
   void _addLog(TrafficLogEntry entry) {
@@ -107,6 +248,8 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
+      scaffoldMessengerKey: _scaffoldMessengerKey,
       title: 'Traffic Remote',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -187,21 +330,43 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
                   ),
                 ];
 
+                if (!_startKioskPromptShown) {
+                  _startKioskPromptShown = true;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) {
+                      _showStartKioskDialog();
+                    }
+                  });
+                }
+
                 return Scaffold(
-                  body: SafeArea(
-                    child: Column(
-                      children: <Widget>[
-                        _ConnectionHeader(
-                          serialService: _serialService,
-                          isPaired: _settingsService.settings.isPaired,
+                  body: Stack(
+                    children: <Widget>[
+                      SafeArea(
+                        child: Column(
+                          children: <Widget>[
+                            _ConnectionHeader(
+                              serialService: _serialService,
+                              isPaired: _settingsService.settings.isPaired,
+                            ),
+                            _CommandStatusCard(
+                              status: currentTopStatus,
+                              entry: _latestLog,
+                            ),
+                            Expanded(child: pages[selectedIndex]),
+                          ],
                         ),
-                        _CommandStatusCard(
-                          status: currentTopStatus,
-                          entry: _latestLog,
+                      ),
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onTap: _handleAdminSecretTap,
+                          child: const SizedBox(width: 72, height: 72),
                         ),
-                        Expanded(child: pages[selectedIndex]),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                   bottomNavigationBar: _BottomNav(
                     selectedIndex: selectedIndex,
@@ -211,15 +376,7 @@ class _TrafficRemoteAppState extends State<TrafficRemoteApp> {
                         final message = !isConnected
                             ? 'กรุณาเชื่อมต่ออุปกรณ์ก่อนใช้งานรีโมท'
                             : 'กรุณา pair อุปกรณ์ก่อนใช้งานรีโมท';
-                        ScaffoldMessenger.of(context)
-                          ..hideCurrentSnackBar()
-                          ..showSnackBar(
-                            SnackBar(
-                              content: Text(message),
-                              behavior: SnackBarBehavior.floating,
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
+                        _showSnackBar(message);
                         return;
                       }
                       setState(() => _selectedIndex = index);
