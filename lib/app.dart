@@ -557,9 +557,9 @@ class _CommandStatusCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: visual.foreground,
-                            fontSize: 15,
+                            fontSize: 20,
                             height: 1.1,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w900,
                             letterSpacing: 0,
                           ),
                         ),
@@ -567,9 +567,9 @@ class _CommandStatusCard extends StatelessWidget {
                           visual.label,
                           style: TextStyle(
                             color: visual.foreground,
-                            fontSize: 20,
-                            height: 1.05,
-                            fontWeight: FontWeight.w900,
+                            fontSize: 15,
+                            height: 1.1,
+                            fontWeight: FontWeight.w800,
                             letterSpacing: 0,
                           ),
                         ),
@@ -583,7 +583,7 @@ class _CommandStatusCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
                   Text(
-                    'Operation time',
+                    'เวลาที่ใช้งาน',
                     textAlign: TextAlign.right,
                     style: TextStyle(
                       color: visual.foreground,
