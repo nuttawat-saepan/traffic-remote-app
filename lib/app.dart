@@ -505,7 +505,7 @@ class _CommandStatusCard extends StatelessWidget {
     final isReady = status == TopRemoteStatus.ready;
     final details = entry == null
         ? 'พร้อมส่งคำสั่ง'
-        : 'คำสั่ง ${_formatActionLabel(entry.action)}';
+        : '${_formatActionLabel(entry.action)}';
     final relativeTime = entry == null
         ? null
         : _formatRelativeTime(DateTime.now().difference(entry.timestamp));
